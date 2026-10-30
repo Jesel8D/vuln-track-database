@@ -1,0 +1,65 @@
+erDiagram
+    users ||--o{ analysis_runs : initiates
+    assets ||--o{ analysis_runs : assessed_by
+    analysis_runs ||--o{ findings : produces
+    users ||--o{ asset_registration_requests : submits
+    assets ||--o{ asset_registration_requests : records
+    users {
+        uuid id PK
+        text username UK
+        text password_hash "nullable"
+        boolean active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    assets {
+        uuid id PK
+        text device_type
+        text manufacturer
+        text model
+        text version
+        text site_label
+        text inventory_label "nullable"
+        text notes "nullable"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    analysis_runs {
+        uuid id PK
+        uuid asset_id FK
+        uuid initiated_by FK
+        text kind "nvd_cve only in V1"
+        text selected_cpe
+        text status
+        text coverage "nullable"
+        timestamptz source_timestamp "nullable"
+        timestamptz started_at "nullable"
+        timestamptz completed_at "nullable"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    findings {
+        uuid id PK
+        uuid analysis_id FK
+        text source "NVD only in V1"
+        text external_id
+        text title "nullable"
+        text applicability "potential only in V1"
+        text status
+        jsonb cvss "nullable"
+        timestamptz observed_at
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    asset_registration_requests {
+        uuid user_id PK,FK
+        text method PK
+        text route PK
+        uuid idempotency_key PK
+        text request_hash
+        uuid asset_id FK
+        smallint response_status
+        jsonb response_body
+        timestamptz created_at
+        timestamptz expires_at
+    }
