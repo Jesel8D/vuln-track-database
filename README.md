@@ -6,6 +6,8 @@ El [contexto y limitaciones del MVP](docs/PROJECT_CONTEXT_AND_LIMITATIONS.md) de
 
 El modelo objetivo y el plan de evolución están en [DATABASE_V2_PLAN.md](docs/DATABASE_V2_PLAN.md). V2 se crea en instalaciones limpias y tiene una migración aditiva manual para instalaciones V1; la migración preserva los datos legados sin asignarles una propiedad inventada.
 
+La API debe calcular un HMAC SHA-256 del texto UTF-8 `v1|{user_uuid}|{workspace_uuid}|{expires_epoch}|{nonce_uuid}` con la clave aleatoria en `vulntrack_private.context_keys`, y llamar `vulntrack.establish_context(user, workspace, expires_epoch, nonce, signature)` al inicio de cada transacción. La firma es hex minúscula y expira en 60 segundos. Un administrador obtiene la clave una sola vez mediante `SELECT encode(hmac_key, 'hex') FROM vulntrack_private.context_keys WHERE singleton;` y la entrega al gestor de secretos del backend por un canal seguro; no guardarla en `.env.example`, Git, logs ni respuestas de API. No exponer credenciales SQL a clientes. Rotar coordinadamente la clave de PostgreSQL y del backend.
+
 ## Inicio local
 
 Requiere Docker y Docker Compose con `up --wait`. Desde este repositorio:

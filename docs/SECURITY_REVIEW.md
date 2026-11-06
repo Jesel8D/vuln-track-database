@@ -16,7 +16,7 @@ La prueba confirma límites por tabla y columna, pero no intenta ataques entre u
 
 **Mitigación:** vincular actor, activo, ejecución y hallazgos a un propietario/espacio de trabajo; actualizar solo filas autorizadas y probar lecturas, modificaciones, referencias cruzadas y claves idempotentes con actores distintos.
 
-**Estado tras iniciar V2:** las tablas nuevas incluyen `workspace_id`, claves foráneas compuestas y pruebas para referencias cruzadas. Esto evita mezclar objetos de espacios distintos en una misma relación, pero no filtra por sí solo los `SELECT` del rol compartido. El aislamiento de lectura/escritura sigue siendo responsabilidad de la autorización del backend y permanece abierto hasta contar con una frontera de identidad no falsificable y pruebas de aislamiento entre usuarios.
+**Estado tras iniciar V2:** las tablas nuevas incluyen `workspace_id`, claves foráneas compuestas y RLS por workspace/rol. El contexto está firmado con HMAC SHA-256 y expira en 60 segundos; `vulntrack_app` no puede leer la clave y los cambios manuales a los GUC invalidan la firma. Esto evita que una consulta SQL arbitraria use esos GUC para suplantar a otro usuario mientras la clave y el backend estén protegidos. La autenticación, autorización funcional y provisión segura del secreto todavía deben implementarse en el backend. Las tablas heredadas V1 tampoco tienen RLS.
 
 ### Medio — Datos arbitrarios sensibles pueden guardarse en notas y respuestas JSON
 

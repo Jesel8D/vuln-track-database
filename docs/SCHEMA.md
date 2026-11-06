@@ -1,6 +1,8 @@
-# Esquema relacional V1
+# Esquema relacional V1 heredado
 
 **PROPUESTA** técnica implementada y contrastable con [001_schema.sql](../sql/001_schema.sql); no reemplaza la aprobación del modelo global. Esquema `vulntrack`, cinco tablas: cuatro entidades de dominio y una tabla técnica. UUID sin generador SQL por defecto: los identificadores deben llegar del servidor de aplicación o de los scripts de demostración. Marcas `timestamptz`; sesión de desarrollo en UTC. API deberá emitir UTC RFC 3339 y decidir formatos al mostrar fechas.
+
+Este documento describe únicamente las tablas V1 de inventario legado; para el modelo de aplicaciones web y workspaces ver [DATABASE_V2_PLAN.md](DATABASE_V2_PLAN.md). Las tablas V1 no reciben las políticas RLS de V2 y no deben exponerse a un login operativo multiusuario.
 
 ## Tablas y diccionario
 
@@ -44,4 +46,4 @@ La PK técnica comienza con user_id y cubre consultas de su FK. Sin índices en 
 
 Persistir activo y solicitud en la misma transacción permite que una colisión de clave revierta el segundo activo; se prueba con dos conexiones. El snapshot puede recuperarse después de un resultado incierto. **PENDIENTE backend:** calcular la huella de contenido normalizado, comprobar actor/permiso, comparar huellas, devolver la respuesta original, tratar conflicto temporal y decidir expiración/reconciliación. No hay rutina de registro ni garantía de idempotencia E2E. No borrar automáticamente claves vencidas; 24 h es una propuesta, no contrato acordado.
 
-`vulntrack_app` es grupo NOLOGIN, sin atributos administrativos. Tiene USAGE del esquema, lectura de activos/evaluaciones/hallazgos/solicitudes, INSERT en esas cuatro tablas, lectura de columnas públicas de users y UPDATE limitado a estado/cobertura/tiempos de análisis y estado de hallazgo. No lee password_hash, no administra usuarios, no crea objetos ni actualiza/elimina activos. El dueño de instalación local es superusuario por diseño de la imagen oficial; no debe usarse por la API. No hay RLS ni autorización por recurso, autenticación funcional, roles de negocio o gestión de sesiones. Crear el login operativo y su secreto corresponde a la integración posterior, fuera de Git.
+`vulntrack_app` es grupo NOLOGIN, sin atributos administrativos. Tiene USAGE del esquema, lectura de activos/evaluaciones/hallazgos/solicitudes, INSERT en esas cuatro tablas, lectura de columnas públicas de users y UPDATE limitado a estado/cobertura/tiempos de análisis y estado de hallazgo. No lee password_hash, no administra usuarios, no crea objetos ni actualiza/elimina activos. El dueño de instalación local es superusuario por diseño de la imagen oficial; no debe usarse por la API. En V1 no hay RLS ni autorización por recurso, autenticación funcional, roles de negocio o gestión de sesiones. Crear el login operativo y su secreto corresponde a la integración posterior, fuera de Git.

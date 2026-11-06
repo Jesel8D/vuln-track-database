@@ -257,6 +257,237 @@ CREATE INDEX recommendations_finding_idx ON vulntrack.recommendations (workspace
 CREATE INDEX imports_application_idx ON vulntrack.dependency_imports (workspace_id, application_id, created_at DESC);
 CREATE INDEX audit_events_workspace_time_idx ON vulntrack.audit_events (workspace_id, occurred_at DESC, id);
 
+-- Signed short-lived request context: plain custom GUCs are forgeable by any
+-- client holding the shared SQL login, so RLS accepts them only with a valid HMAC.
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE SCHEMA vulntrack_private;
+REVOKE ALL ON SCHEMA vulntrack_private FROM PUBLIC, vulntrack_app;
+DO $$
+BEGIN
+    IF (SELECT n.nspname FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace
+        WHERE e.extname = 'pgcrypto') <> 'public' THEN
+        RAISE EXCEPTION 'pgcrypto debe estar instalado en el esquema public';
+    END IF;
+END $$;
+CREATE TABLE vulntrack_private.context_keys (
+    singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+    hmac_key bytea NOT NULL CHECK (octet_length(hmac_key) = 32)
+);
+INSERT INTO vulntrack_private.context_keys(singleton, hmac_key)
+VALUES (true, public.gen_random_bytes(32));
+
+CREATE FUNCTION vulntrack.context_is_valid()
+RETURNS boolean LANGUAGE plpgsql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, vulntrack, vulntrack_private AS $$
+DECLARE
+    user_text text := current_setting('vulntrack.context_user', true);
+    workspace_text text := current_setting('vulntrack.context_workspace', true);
+    expiry_text text := current_setting('vulntrack.context_expiry', true);
+    nonce_text text := current_setting('vulntrack.context_nonce', true);
+    signature_text text := current_setting('vulntrack.context_signature', true);
+    user_value uuid;
+    workspace_value uuid;
+    expiry_value bigint;
+    nonce_value uuid;
+    context_key bytea;
+    expected_signature bytea;
+    signed_payload text;
+BEGIN
+    IF user_text IS NULL OR workspace_text IS NULL OR expiry_text IS NULL
+       OR nonce_text IS NULL OR signature_text IS NULL
+       OR signature_text !~ '^[0-9a-f]{64}$' THEN
+        RETURN false;
+    END IF;
+    user_value := user_text::uuid;
+    workspace_value := workspace_text::uuid;
+    expiry_value := expiry_text::bigint;
+    nonce_value := nonce_text::uuid;
+    IF expiry_value <= floor(extract(epoch FROM clock_timestamp()))::bigint
+       OR expiry_value > floor(extract(epoch FROM clock_timestamp()))::bigint + 60 THEN
+        RETURN false;
+    END IF;
+    SELECT hmac_key INTO STRICT context_key
+    FROM vulntrack_private.context_keys WHERE singleton;
+    signed_payload := 'v1|' || user_value::text || '|' || workspace_value::text || '|'
+        || expiry_value::text || '|' || nonce_value::text;
+    expected_signature := public.hmac(convert_to(signed_payload, 'UTF8'), context_key, 'sha256');
+    RETURN expected_signature = decode(signature_text, 'hex');
+EXCEPTION WHEN OTHERS THEN
+    RETURN false;
+END $$;
+
+CREATE FUNCTION vulntrack.current_user_id()
+RETURNS uuid LANGUAGE sql STABLE PARALLEL SAFE
+AS $$ SELECT CASE WHEN vulntrack.context_is_valid()
+    THEN nullif(current_setting('vulntrack.context_user', true), '')::uuid END $$;
+CREATE FUNCTION vulntrack.current_workspace_id()
+RETURNS uuid LANGUAGE sql STABLE PARALLEL SAFE
+AS $$ SELECT CASE WHEN vulntrack.context_is_valid()
+    THEN nullif(current_setting('vulntrack.context_workspace', true), '')::uuid END $$;
+
+CREATE FUNCTION vulntrack.establish_context(
+    requested_user uuid, requested_workspace uuid, expires_epoch bigint,
+    request_nonce uuid, request_signature text
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, vulntrack, vulntrack_private AS $$
+DECLARE
+    context_key bytea;
+    signed_payload text;
+BEGIN
+    IF expires_epoch <= floor(extract(epoch FROM clock_timestamp()))::bigint
+       OR expires_epoch > floor(extract(epoch FROM clock_timestamp()))::bigint + 60
+       OR request_signature !~ '^[0-9a-f]{64}$' THEN
+        RAISE EXCEPTION 'contexto firmado inválido o expirado' USING ERRCODE = '28000';
+    END IF;
+    SELECT hmac_key INTO STRICT context_key
+    FROM vulntrack_private.context_keys WHERE singleton;
+    signed_payload := 'v1|' || requested_user::text || '|' || requested_workspace::text || '|'
+        || expires_epoch::text || '|' || request_nonce::text;
+    IF public.hmac(convert_to(signed_payload, 'UTF8'), context_key, 'sha256')
+       <> decode(request_signature, 'hex') THEN
+        RAISE EXCEPTION 'firma de contexto inválida' USING ERRCODE = '28000';
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM vulntrack.workspace_members wm
+        JOIN vulntrack.users u ON u.id = wm.user_id
+        WHERE wm.workspace_id = requested_workspace AND wm.user_id = requested_user AND u.active
+    ) THEN
+        RAISE EXCEPTION 'usuario inactivo o fuera del workspace' USING ERRCODE = '42501';
+    END IF;
+    PERFORM set_config('vulntrack.context_user', requested_user::text, true);
+    PERFORM set_config('vulntrack.context_workspace', requested_workspace::text, true);
+    PERFORM set_config('vulntrack.context_expiry', expires_epoch::text, true);
+    PERFORM set_config('vulntrack.context_nonce', request_nonce::text, true);
+    PERFORM set_config('vulntrack.context_signature', request_signature, true);
+END $$;
+
+CREATE FUNCTION vulntrack.has_workspace_role(target_workspace uuid, allowed_roles text[])
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, vulntrack
+AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM vulntrack.workspace_members wm
+        JOIN vulntrack.users u ON u.id = wm.user_id
+        WHERE wm.workspace_id = target_workspace AND wm.user_id = vulntrack.current_user_id()
+          AND wm.role = ANY(allowed_roles) AND u.active
+    )
+$$;
+
+CREATE FUNCTION vulntrack.is_workspace_creator(target_workspace uuid)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, vulntrack
+AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM vulntrack.workspaces w
+        WHERE w.id = target_workspace AND w.created_by = vulntrack.current_user_id()
+    )
+$$;
+
+ALTER TABLE vulntrack.workspaces ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vulntrack.workspace_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vulntrack.applications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vulntrack.application_targets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vulntrack.technologies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vulntrack.application_analysis_runs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vulntrack.application_findings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vulntrack.recommendations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vulntrack.dependency_imports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vulntrack.audit_events ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY workspace_read ON vulntrack.workspaces FOR SELECT
+USING (id = vulntrack.current_workspace_id()
+    AND vulntrack.has_workspace_role(id, ARRAY['owner','editor','viewer']));
+CREATE POLICY workspace_create ON vulntrack.workspaces FOR INSERT
+WITH CHECK (id = vulntrack.current_workspace_id() AND created_by = vulntrack.current_user_id());
+CREATE POLICY workspace_update ON vulntrack.workspaces FOR UPDATE
+USING (id = vulntrack.current_workspace_id()
+    AND vulntrack.has_workspace_role(id, ARRAY['owner','editor']))
+WITH CHECK (id = vulntrack.current_workspace_id()
+    AND vulntrack.has_workspace_role(id, ARRAY['owner','editor']));
+
+CREATE POLICY members_read ON vulntrack.workspace_members FOR SELECT
+USING (workspace_id = vulntrack.current_workspace_id()
+    AND vulntrack.has_workspace_role(workspace_id, ARRAY['owner','editor','viewer']));
+CREATE POLICY members_create ON vulntrack.workspace_members FOR INSERT
+WITH CHECK (workspace_id = vulntrack.current_workspace_id()
+    AND ((user_id = vulntrack.current_user_id() AND role = 'owner'
+          AND vulntrack.is_workspace_creator(workspace_id))
+      OR vulntrack.has_workspace_role(workspace_id, ARRAY['owner'])));
+CREATE POLICY members_manage_update ON vulntrack.workspace_members FOR UPDATE
+USING (workspace_id = vulntrack.current_workspace_id()
+    AND vulntrack.has_workspace_role(workspace_id, ARRAY['owner']))
+WITH CHECK (workspace_id = vulntrack.current_workspace_id()
+    AND vulntrack.has_workspace_role(workspace_id, ARRAY['owner']));
+CREATE POLICY members_manage_delete ON vulntrack.workspace_members FOR DELETE
+USING (workspace_id = vulntrack.current_workspace_id()
+    AND vulntrack.has_workspace_role(workspace_id, ARRAY['owner']));
+
+DO $$
+DECLARE table_name text;
+BEGIN
+    FOREACH table_name IN ARRAY ARRAY[
+        'applications', 'application_targets', 'technologies',
+        'application_analysis_runs', 'application_findings', 'recommendations',
+        'dependency_imports'
+    ] LOOP
+        EXECUTE format('CREATE POLICY %I ON vulntrack.%I FOR SELECT USING (
+            workspace_id = vulntrack.current_workspace_id()
+            AND vulntrack.has_workspace_role(workspace_id, ARRAY[''owner'',''editor'',''viewer'']))',
+            table_name || '_read', table_name);
+        EXECUTE format('CREATE POLICY %I ON vulntrack.%I FOR UPDATE
+            USING (workspace_id = vulntrack.current_workspace_id()
+              AND vulntrack.has_workspace_role(workspace_id, ARRAY[''owner'',''editor'']))
+            WITH CHECK (workspace_id = vulntrack.current_workspace_id()
+              AND vulntrack.has_workspace_role(workspace_id, ARRAY[''owner'',''editor'']))',
+            table_name || '_update', table_name);
+    END LOOP;
+END $$;
+
+CREATE POLICY applications_create ON vulntrack.applications FOR INSERT
+WITH CHECK (workspace_id = vulntrack.current_workspace_id()
+    AND created_by = vulntrack.current_user_id()
+    AND vulntrack.has_workspace_role(workspace_id, ARRAY['owner','editor']));
+CREATE POLICY application_targets_create ON vulntrack.application_targets FOR INSERT
+WITH CHECK (workspace_id = vulntrack.current_workspace_id()
+    AND created_by = vulntrack.current_user_id()
+    AND vulntrack.has_workspace_role(workspace_id, ARRAY['owner','editor']));
+CREATE POLICY technologies_create ON vulntrack.technologies FOR INSERT
+WITH CHECK (workspace_id = vulntrack.current_workspace_id()
+    AND created_by = vulntrack.current_user_id()
+    AND vulntrack.has_workspace_role(workspace_id, ARRAY['owner','editor']));
+CREATE POLICY application_analysis_runs_create ON vulntrack.application_analysis_runs FOR INSERT
+WITH CHECK (workspace_id = vulntrack.current_workspace_id()
+    AND initiated_by = vulntrack.current_user_id()
+    AND vulntrack.has_workspace_role(workspace_id, ARRAY['owner','editor']));
+CREATE POLICY application_findings_create ON vulntrack.application_findings FOR INSERT
+WITH CHECK (workspace_id = vulntrack.current_workspace_id()
+    AND vulntrack.has_workspace_role(workspace_id, ARRAY['owner','editor']));
+CREATE POLICY recommendations_create ON vulntrack.recommendations FOR INSERT
+WITH CHECK (workspace_id = vulntrack.current_workspace_id()
+    AND created_by = vulntrack.current_user_id()
+    AND vulntrack.has_workspace_role(workspace_id, ARRAY['owner','editor']));
+CREATE POLICY dependency_imports_create ON vulntrack.dependency_imports FOR INSERT
+WITH CHECK (workspace_id = vulntrack.current_workspace_id()
+    AND imported_by = vulntrack.current_user_id()
+    AND vulntrack.has_workspace_role(workspace_id, ARRAY['owner','editor']));
+CREATE POLICY audit_events_create ON vulntrack.audit_events FOR INSERT
+WITH CHECK (workspace_id = vulntrack.current_workspace_id()
+    AND actor_id = vulntrack.current_user_id()
+    AND vulntrack.has_workspace_role(workspace_id, ARRAY['owner','editor']));
+
+REVOKE ALL ON FUNCTION vulntrack.current_user_id() FROM PUBLIC;
+REVOKE ALL ON FUNCTION vulntrack.current_workspace_id() FROM PUBLIC;
+REVOKE ALL ON FUNCTION vulntrack.context_is_valid() FROM PUBLIC;
+REVOKE ALL ON FUNCTION vulntrack.establish_context(uuid, uuid, bigint, uuid, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION vulntrack.has_workspace_role(uuid, text[]) FROM PUBLIC;
+REVOKE ALL ON FUNCTION vulntrack.is_workspace_creator(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION vulntrack.current_user_id() TO vulntrack_app;
+GRANT EXECUTE ON FUNCTION vulntrack.current_workspace_id() TO vulntrack_app;
+GRANT EXECUTE ON FUNCTION vulntrack.context_is_valid() TO vulntrack_app;
+GRANT EXECUTE ON FUNCTION vulntrack.establish_context(uuid, uuid, bigint, uuid, text) TO vulntrack_app;
+GRANT EXECUTE ON FUNCTION vulntrack.has_workspace_role(uuid, text[]) TO vulntrack_app;
+GRANT EXECUTE ON FUNCTION vulntrack.is_workspace_creator(uuid) TO vulntrack_app;
+
 -- El trigger compartido valida id/created_at inmutables y mantiene updated_at.
 CREATE TRIGGER workspaces_touch BEFORE UPDATE ON vulntrack.workspaces
 FOR EACH ROW EXECUTE FUNCTION vulntrack.touch_updated_at();
@@ -289,6 +520,35 @@ AFTER INSERT OR UPDATE ON vulntrack.workspaces
 DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
 EXECUTE FUNCTION vulntrack.require_workspace_owner();
 
+CREATE FUNCTION vulntrack.require_workspace_owner_membership()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = pg_catalog, vulntrack AS $$
+DECLARE target_workspace uuid;
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        target_workspace := OLD.workspace_id;
+    ELSE
+        target_workspace := NEW.workspace_id;
+    END IF;
+    IF EXISTS (
+        SELECT 1 FROM vulntrack.workspaces w
+        WHERE w.id = target_workspace AND NOT EXISTS (
+            SELECT 1 FROM vulntrack.workspace_members wm
+            WHERE wm.workspace_id = w.id AND wm.user_id = w.created_by AND wm.role = 'owner'
+        )
+    ) OR NOT EXISTS (
+        SELECT 1 FROM vulntrack.workspace_members wm
+        WHERE wm.workspace_id = target_workspace AND wm.role = 'owner'
+    ) THEN
+        RAISE EXCEPTION 'workspace debe conservar al creador y al menos un owner' USING ERRCODE = '23514';
+    END IF;
+    RETURN NULL;
+END $$;
+CREATE CONSTRAINT TRIGGER workspace_members_owner_guard
+AFTER INSERT OR UPDATE OR DELETE ON vulntrack.workspace_members
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW
+EXECUTE FUNCTION vulntrack.require_workspace_owner_membership();
+
 CREATE FUNCTION vulntrack.reject_audit_mutation()
 RETURNS trigger LANGUAGE plpgsql SET search_path = pg_catalog AS $$
 BEGIN
@@ -301,6 +561,7 @@ GRANT SELECT, INSERT ON vulntrack.workspaces, vulntrack.workspace_members,
     vulntrack.applications, vulntrack.application_targets, vulntrack.technologies,
     vulntrack.application_analysis_runs, vulntrack.application_findings,
     vulntrack.recommendations, vulntrack.dependency_imports TO vulntrack_app;
+GRANT UPDATE (role), DELETE ON vulntrack.workspace_members TO vulntrack_app;
 GRANT UPDATE (name) ON vulntrack.workspaces TO vulntrack_app;
 GRANT UPDATE (name, description, status) ON vulntrack.applications TO vulntrack_app;
 GRANT UPDATE (authorization_status, authorization_expires_at, authorization_reference)
@@ -314,6 +575,7 @@ GRANT UPDATE (recommendation, source_url, status, assigned_to, due_at, completed
 GRANT INSERT ON vulntrack.audit_events TO vulntrack_app;
 GRANT USAGE, SELECT ON SEQUENCE vulntrack.audit_events_id_seq TO vulntrack_app;
 REVOKE ALL ON FUNCTION vulntrack.require_workspace_owner() FROM PUBLIC;
+REVOKE ALL ON FUNCTION vulntrack.require_workspace_owner_membership() FROM PUBLIC;
 REVOKE ALL ON FUNCTION vulntrack.reject_audit_mutation() FROM PUBLIC;
 
 -- Membresía owner se inserta en la misma transacción que el workspace.
