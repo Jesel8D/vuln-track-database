@@ -2,6 +2,10 @@
 
 Implementación local de la persistencia de usuarios mínimos, activos, evaluaciones NVD y hallazgos potenciales. Incluye soporte de almacenamiento para claves idempotentes; no contiene API, autenticación completa, ORM ni migraciones Alembic. El diseño materializado continúa como **PROPUESTA** técnica provisional para revisión, según la misión de Database V1 del 30-10-2026. D-001 y D-002 permanecen **APROBADA** en el [contexto central](https://github.com/Jesel8D/vuln-track-context/tree/dev/jesel).
 
+El [contexto y limitaciones del MVP](docs/PROJECT_CONTEXT_AND_LIMITATIONS.md) describe el producto previsto. La [revisión de seguridad](docs/SECURITY_REVIEW.md) registra los riesgos encontrados antes de diseñar Database V2.
+
+El modelo objetivo y el plan de evolución están en [DATABASE_V2_PLAN.md](docs/DATABASE_V2_PLAN.md). V2 se crea en instalaciones limpias y tiene una migración aditiva manual para instalaciones V1; la migración preserva los datos legados sin asignarles una propiedad inventada.
+
 ## Inicio local
 
 Requiere Docker y Docker Compose con `up --wait`. Desde este repositorio:
@@ -35,7 +39,7 @@ docs/TEST_RESULTS.md
 diagrams/database_v1.mmd
 ```
 
-El entrypoint oficial ejecuta [00-bootstrap.sh](init/00-bootstrap.sh) únicamente con el directorio de datos vacío: primero el [esquema](sql/001_schema.sql), después los [privilegios](sql/002_privileges.sql). Ambos scripts usan transacciones y detienen la ejecución ante error. Los seeds y pruebas **no** se ejecutan al arrancar. No es un mecanismo de actualización de bases existentes. Si falla el primer arranque, comprobar logs y resolver el punto fallido antes de continuar; no borrar el volumen para ocultar el error.
+El entrypoint oficial ejecuta [00-bootstrap.sh](init/00-bootstrap.sh) únicamente con el directorio de datos vacío: primero el [esquema base](sql/001_schema.sql), después los [privilegios](sql/002_privileges.sql) y el [modelo V2 aditivo](sql/004_v2_application_model.sql). Cada script usa transacción y detiene la ejecución ante error. Los seeds y pruebas **no** se ejecutan al arrancar. En una instalación existente V1, la migración V2 debe ser ejecutada manualmente por un operador tras backup; el entrypoint no reejecuta scripts sobre un volumen existente. Si falla, resolver el error antes de continuar; no borrar el volumen para ocultarlo.
 
 ## Demostración y consultas
 
@@ -58,7 +62,7 @@ El runner crea un **proyecto nuevo** con puerto local aleatorio y las credencial
 
 Con datos existentes, `docker compose up` no reaplica scripts montados. El baseline rechaza un esquema que ya exista en vez de sobreescribirlo. No ejecutar `001_schema.sql` como actualización ni asumir que `CREATE IF NOT EXISTS` detecta diferencias.
 
-Antes de un cambio: identificar proyecto/volumen y versión, generar backup con `pg_dump -Fc`, restaurar en un entorno nuevo y comprobar integridad, revisar cambios SQL y coordinar el contrato backend. No hay upgrade de esquema V2 en este repositorio: está **PENDIENTE** hasta definir cambios; si se adoptan SQLAlchemy/Alembic, modelos y migraciones pertenecen a backend según D-002. La guía no autoriza destruir datos o volúmenes existentes. No ejecutar `down -v` sobre entornos con datos.
+Antes de un cambio: identificar proyecto/volumen y versión, generar backup con `pg_dump -Fc`, restaurar en un entorno nuevo y comprobar integridad, revisar cambios SQL y coordinar el contrato backend. La migración V2 es aditiva, de ejecución única y aún está pendiente de validar en PostgreSQL. No hay una política de evolución/rollback automatizada ni integración con ORM; si se adoptan SQLAlchemy/Alembic, modelos y migraciones pertenecen a backend según D-002. La guía no autoriza destruir datos o volúmenes existentes. No ejecutar `down -v` sobre entornos con datos.
 
 ## Integración posterior
 

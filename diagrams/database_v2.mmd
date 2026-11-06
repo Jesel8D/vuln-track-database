@@ -1,0 +1,102 @@
+erDiagram
+    users ||--o{ workspace_members : joins
+    workspaces ||--|{ workspace_members : contains
+    workspaces ||--o{ applications : owns
+    applications ||--o{ application_targets : exposes
+    applications ||--o{ technologies : uses
+    applications ||--o{ application_analysis_runs : assessed_by
+    application_targets o|--o{ application_analysis_runs : target
+    technologies o|--o{ application_analysis_runs : queried_as
+    application_analysis_runs ||--o{ application_findings : produces
+    application_findings ||--o{ recommendations : addressed_by
+    applications ||--o{ dependency_imports : imports
+    workspaces ||--o{ audit_events : records
+    users ||--o{ audit_events : acts
+
+    workspaces {
+        uuid id PK
+        text name
+        uuid created_by FK
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    workspace_members {
+        uuid workspace_id PK,FK
+        uuid user_id PK,FK
+        text role
+        timestamptz created_at
+    }
+    applications {
+        uuid id PK
+        uuid workspace_id FK
+        text name
+        text description "nullable"
+        text status
+        uuid created_by FK
+    }
+    application_targets {
+        uuid id PK
+        uuid workspace_id FK
+        uuid application_id FK
+        text url
+        text authorization_status
+        timestamptz authorization_expires_at "nullable"
+        text authorization_reference "nullable"
+    }
+    technologies {
+        uuid id PK
+        uuid workspace_id FK
+        uuid application_id FK
+        text product
+        text vendor "nullable"
+        text version
+        text selected_cpe "nullable"
+        text detection_method
+        text confidence
+    }
+    application_analysis_runs {
+        uuid id PK
+        uuid workspace_id FK
+        uuid application_id FK
+        uuid target_id FK "nullable"
+        uuid technology_id FK "nullable"
+        uuid initiated_by FK
+        text kind "NVD only"
+        text status
+        text coverage "nullable"
+    }
+    application_findings {
+        uuid id PK
+        uuid workspace_id FK
+        uuid analysis_id FK
+        text external_id
+        text applicability
+        text status
+        jsonb cvss "nullable"
+    }
+    recommendations {
+        uuid id PK
+        uuid workspace_id FK
+        uuid finding_id FK
+        text recommendation
+        text status
+        uuid assigned_to FK "nullable"
+    }
+    dependency_imports {
+        uuid id PK
+        uuid workspace_id FK
+        uuid application_id FK
+        text format
+        text content_sha256
+        integer dependency_count
+        text status
+    }
+    audit_events {
+        bigint id PK
+        uuid workspace_id FK
+        uuid actor_id FK
+        text action
+        text object_type
+        uuid object_id "nullable"
+        timestamptz occurred_at
+    }

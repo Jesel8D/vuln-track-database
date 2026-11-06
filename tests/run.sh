@@ -2,8 +2,12 @@
 # Crea únicamente un proyecto nuevo y aislado; nunca borra volúmenes.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-project="${VULNTRACK_TEST_PROJECT:-vulntrack-v1-test-$(date +%s)-$$}"
-if [[ ! "$project" =~ ^vulntrack-v1-test-[a-z0-9-]+$ ]]; then
+# Git Bash may not inherit Docker Desktop's Windows install directory in PATH.
+if ! command -v docker >/dev/null 2>&1 && [[ -x "/c/Program Files/Docker/Docker/resources/bin/docker.exe" ]]; then
+  export PATH="/c/Program Files/Docker/Docker/resources/bin:$PATH"
+fi
+project="${VULNTRACK_TEST_PROJECT:-vulntrack-db-test-$(date +%s)-$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')}"
+if [[ ! "$project" =~ ^vulntrack-db-test-[a-z0-9-]+$ ]]; then
   printf 'Nombre de proyecto de prueba no válido.\n' >&2
   exit 1
 fi
@@ -49,6 +53,7 @@ printf 'ok - reaplicación del baseline rechazada sin sobrescribir datos\n'
 db -f /vulntrack/seed/001_demo.sql
 db -f /vulntrack/seed/001_demo.sql
 db -f /vulntrack/tests/001_integrity.sql
+db -f /vulntrack/tests/002_v2_security.sql
 db -f /vulntrack/sql/003_queries.sql
 
 # Dos conexiones intentan confirmar el mismo intento lógico. La unicidad del
@@ -114,4 +119,4 @@ printf 'ok - datos conservados tras reinicio\n'
 "${compose[@]}" up -d --force-recreate --wait --wait-timeout 90 postgres
 [[ "$(db -Atc "$snapshot_sql")" == "$before" ]]
 printf 'ok - datos conservados tras recrear contenedor con el mismo volumen\n'
-printf 'PRUEBAS V1 CORRECTAS. No se ha probado una API ni idempotencia extremo a extremo.\n'
+printf 'SUITE DE BASE DE DATOS CORRECTA. No se ha probado una API ni idempotencia extremo a extremo.\n'
