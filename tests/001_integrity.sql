@@ -21,11 +21,14 @@ BEGIN
 END $$;
 
 SELECT pg_temp.assert_true((SELECT count(*) = 5 FROM information_schema.tables
-    WHERE table_schema = 'vulntrack' AND table_type = 'BASE TABLE'), 'cinco tablas V1');
+    WHERE table_schema = 'vulntrack' AND table_type = 'BASE TABLE'
+      AND table_name IN ('users','assets','analysis_runs','findings','asset_registration_requests')), 'cinco tablas V1');
 SELECT pg_temp.assert_true((SELECT count(*) = 5 FROM pg_constraint c
-    JOIN pg_namespace n ON n.oid = c.connamespace WHERE n.nspname = 'vulntrack' AND c.contype = 'p'), 'cinco claves primarias');
+    JOIN pg_namespace n ON n.oid = c.connamespace WHERE n.nspname = 'vulntrack' AND c.contype = 'p'
+      AND c.conrelid IN ('vulntrack.users'::regclass, 'vulntrack.assets'::regclass, 'vulntrack.analysis_runs'::regclass, 'vulntrack.findings'::regclass, 'vulntrack.asset_registration_requests'::regclass)), 'cinco claves primarias');
 SELECT pg_temp.assert_true((SELECT count(*) = 5 FROM pg_constraint c
-    JOIN pg_namespace n ON n.oid = c.connamespace WHERE n.nspname = 'vulntrack' AND c.contype = 'f'), 'cinco claves foráneas');
+    JOIN pg_namespace n ON n.oid = c.connamespace WHERE n.nspname = 'vulntrack' AND c.contype = 'f'
+      AND c.conrelid IN ('vulntrack.users'::regclass, 'vulntrack.assets'::regclass, 'vulntrack.analysis_runs'::regclass, 'vulntrack.findings'::regclass, 'vulntrack.asset_registration_requests'::regclass)), 'cinco claves foráneas');
 SELECT pg_temp.assert_true((SELECT count(*) = 3 FROM vulntrack.assets), 'seed repetible: tres activos');
 SELECT pg_temp.assert_true((SELECT count(*) = 2 FROM vulntrack.analysis_runs), 'dos evaluaciones asociadas');
 SELECT pg_temp.assert_true((SELECT count(*) = 1 FROM vulntrack.findings), 'un hallazgo potencial');

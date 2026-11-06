@@ -83,7 +83,7 @@ SELECT pg_temp.expect_error($q$INSERT INTO vulntrack.application_analysis_runs
     '51000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002',
     'cpe:2.3:a:demo:product:1.0:*:*:*:*:*:*:*')$q$,
     '23503', 'iniciador ajeno al workspace rechazado');
-SET CONSTRAINTS workspaces_require_owner IMMEDIATE;
+SET CONSTRAINTS vulntrack.workspaces_require_owner IMMEDIATE;
 SELECT pg_temp.expect_error($q$INSERT INTO vulntrack.workspaces(id,name,created_by)
     VALUES ('50000000-0000-4000-8000-000000000003','Sin owner','00000000-0000-4000-8000-000000000001')$q$,
     '23514', 'workspace sin owner rechazado');
@@ -113,7 +113,7 @@ VALUES ('50000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-0000000
 SELECT pg_temp.expect_error($q$UPDATE vulntrack.audit_events SET action = 'forged'$q$,
     '23514', 'auditoría append-only');
 SELECT pg_temp.assert_true((SELECT count(*) = 2 FROM vulntrack.applications), 'aplicaciones separadas por workspace');
-SET CONSTRAINTS workspace_members_owner_guard IMMEDIATE;
+SET CONSTRAINTS vulntrack.workspace_members_owner_guard IMMEDIATE;
 SELECT pg_temp.expect_error($q$UPDATE vulntrack.workspace_members SET role = 'viewer'
     WHERE workspace_id = '50000000-0000-4000-8000-000000000001'
       AND user_id = '00000000-0000-4000-8000-000000000001'$q$,
