@@ -7,6 +7,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-vulntrack_owner}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Definir una contraseña local de desarrollo}
       POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+      VULNTRACK_SCHEMA: ${VULNTRACK_SCHEMA:-v1}
       TZ: UTC
       PGTZ: UTC
     ports:

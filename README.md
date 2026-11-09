@@ -1,3 +1,5 @@
+> **Rama MVP-A:** [bootstrap CPE y coordinación con Alembic](docs/MVP_A.md). Default V1 preservado; opción mvp-a solo para instalación nueva.
+
 # VulnTrack — PostgreSQL Database V1
 
 Implementación local de la persistencia de usuarios mínimos, activos, evaluaciones NVD y hallazgos potenciales. Incluye soporte de almacenamiento para claves idempotentes; no contiene API, autenticación completa, ORM ni migraciones Alembic. El diseño materializado continúa como **PROPUESTA** técnica provisional para revisión, según la misión de Database V1 del 30-10-2026. D-001 y D-002 permanecen **APROBADA** en el [contexto central](https://github.com/Jesel8D/vuln-track-context/tree/dev/jesel).
