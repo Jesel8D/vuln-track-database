@@ -1,3 +1,5 @@
+> **Rama MVP-B:** [bootstrap incremental, integridad y pruebas](docs/MVP_B.md). `VULNTRACK_SCHEMA=mvp-b` solo para instalación nueva. En esta opción no cargar el seed V1 después del bootstrap; el histórico sintético se prueba antes de migrar. Las instrucciones V1 siguientes son antecedentes.
+
 > **Rama MVP-A:** [bootstrap CPE y coordinación con Alembic](docs/MVP_A.md). Default V1 preservado; opción mvp-a solo para instalación nueva.
 
 # VulnTrack — PostgreSQL Database V1
