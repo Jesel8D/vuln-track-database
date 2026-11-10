@@ -65,11 +65,20 @@ VALUES ('53000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-0000000
  'cpe:2.3:a:demo:product:1.0:*:*:*:*:*:*:*', 'manual', '00000000-0000-4000-8000-000000000001');
 
 INSERT INTO vulntrack.application_analysis_runs
-    (id, workspace_id, application_id, target_id, technology_id, initiated_by, selected_cpe)
+    (id, workspace_id, application_id, target_id, technology_id, initiated_by, selected_cpe,
+     request_key, request_hash, query_parameters)
 VALUES ('54000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001',
  '51000000-0000-4000-8000-000000000001', '52000000-0000-4000-8000-000000000001',
  '53000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001',
- 'cpe:2.3:a:demo:product:1.0:*:*:*:*:*:*:*');
+ 'cpe:2.3:a:demo:product:1.0:*:*:*:*:*:*:*',
+ '58000000-0000-4000-8000-000000000001', repeat('a',64), '{"resultsPerPage":100}');
+SELECT pg_temp.expect_error($q$INSERT INTO vulntrack.application_analysis_runs
+    (id,workspace_id,application_id,technology_id,initiated_by,selected_cpe,request_key,request_hash)
+    VALUES ('54000000-0000-4000-8000-000000000005','50000000-0000-4000-8000-000000000001',
+    '51000000-0000-4000-8000-000000000001','53000000-0000-4000-8000-000000000001',
+    '00000000-0000-4000-8000-000000000001','cpe:2.3:a:demo:product:1.0:*:*:*:*:*:*:*',
+    '58000000-0000-4000-8000-000000000001',repeat('b',64))$q$,
+    '23505', 'clave idempotente NVD única por actor y workspace');
 
 SELECT pg_temp.expect_error($q$INSERT INTO vulntrack.application_analysis_runs
     (id,workspace_id,application_id,target_id,initiated_by,selected_cpe)
@@ -83,6 +92,8 @@ SELECT pg_temp.expect_error($q$INSERT INTO vulntrack.application_analysis_runs
     '51000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002',
     'cpe:2.3:a:demo:product:1.0:*:*:*:*:*:*:*')$q$,
     '23503', 'iniciador ajeno al workspace rechazado');
+UPDATE vulntrack.application_analysis_runs SET status='running', started_at=clock_timestamp()
+WHERE id='54000000-0000-4000-8000-000000000001';
 SET CONSTRAINTS vulntrack.workspaces_require_owner IMMEDIATE;
 SELECT pg_temp.expect_error($q$INSERT INTO vulntrack.workspaces(id,name,created_by)
     VALUES ('50000000-0000-4000-8000-000000000003','Sin owner','00000000-0000-4000-8000-000000000001')$q$,
@@ -100,9 +111,10 @@ SELECT pg_temp.expect_error($q$INSERT INTO vulntrack.application_targets
     '00000000-0000-4000-8000-000000000001')$q$,
     '23514', 'esquema URL no HTTP rechazado');
 
-INSERT INTO vulntrack.application_findings (id, workspace_id, analysis_id, external_id, title)
+INSERT INTO vulntrack.application_findings (id, workspace_id, analysis_id, external_id, title, evidence)
 VALUES ('55000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001',
- '54000000-0000-4000-8000-000000000001', 'CVE-2026-12345', 'Hallazgo sintético');
+ '54000000-0000-4000-8000-000000000001', 'CVE-2026-12345', 'Hallazgo sintético',
+ '{"source":"NVD","initial_applicability":"potential"}');
 INSERT INTO vulntrack.recommendations (id, workspace_id, finding_id, recommendation, created_by)
 VALUES ('56000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001',
  '55000000-0000-4000-8000-000000000001', 'Actualizar a una versión corregida',
@@ -130,6 +142,34 @@ SELECT pg_temp.make_context_signature(
 SET LOCAL ROLE vulntrack_app;
 SELECT vulntrack.establish_context('00000000-0000-4000-8000-000000000001',
     '50000000-0000-4000-8000-000000000001', :context_expiry, :'context_nonce', :'context_signature');
+SELECT pg_temp.expect_error($q$INSERT INTO vulntrack.application_findings
+    (id,workspace_id,analysis_id,external_id,evidence)
+    VALUES ('55000000-0000-4000-8000-000000000003','50000000-0000-4000-8000-000000000001',
+    '54000000-0000-4000-8000-000000000001','CVE-2026-54322','[]')$q$,
+    '23514', 'evidencia NVD no objeto rechazada');
+INSERT INTO vulntrack.application_findings
+    (id,workspace_id,analysis_id,external_id,evidence)
+VALUES ('55000000-0000-4000-8000-000000000002','50000000-0000-4000-8000-000000000001',
+    '54000000-0000-4000-8000-000000000001','CVE-2026-54321',
+    '{"source":"NVD","initial_applicability":"undetermined"}');
+SELECT pg_temp.assert_true((SELECT evidence->>'source'='NVD'
+    FROM vulntrack.application_findings WHERE id='55000000-0000-4000-8000-000000000002'),
+    'ingesta conserva evidencia NVD mientras la ejecución está activa');
+UPDATE vulntrack.application_analysis_runs SET status='completed', coverage='complete',
+    completed_at=clock_timestamp(), total_results=2, retrieved_count=2, stored_count=2,
+    next_index=2, page_count=1,
+    source_timestamps='["2026-11-09T00:00:00Z"]',
+    page_manifest='[{"start_index":0,"count":2,"total":2}]'
+WHERE id='54000000-0000-4000-8000-000000000001';
+SELECT pg_temp.assert_true((SELECT status='completed' AND coverage='complete' AND page_count=1
+    FROM vulntrack.application_analysis_runs WHERE id='54000000-0000-4000-8000-000000000001'),
+    'backend puede persistir progreso y cobertura NVD de su workspace');
+SELECT pg_temp.expect_error($q$UPDATE vulntrack.application_analysis_runs
+    SET request_hash=repeat('b',64) WHERE id='54000000-0000-4000-8000-000000000001'$q$,
+    '42501', 'rol de API no puede reescribir la huella idempotente');
+SELECT pg_temp.expect_error($q$UPDATE vulntrack.application_analysis_runs
+    SET query_parameters='{"apiKey":"secreto"}' WHERE id='54000000-0000-4000-8000-000000000001'$q$,
+    '42501', 'rol de API no puede mutar parámetros del snapshot');
 SELECT pg_temp.assert_true((SELECT count(*) = 1 FROM vulntrack.applications),
     'RLS oculta aplicaciones del otro workspace incluso sin WHERE tenant');
 SELECT set_config('vulntrack.context_user', '00000000-0000-4000-8000-000000000002', true);

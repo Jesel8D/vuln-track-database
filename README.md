@@ -41,7 +41,7 @@ docs/TEST_RESULTS.md
 diagrams/database_v1.mmd
 ```
 
-El entrypoint oficial ejecuta [00-bootstrap.sh](init/00-bootstrap.sh) únicamente con el directorio de datos vacío: primero el [esquema base](sql/001_schema.sql), después los [privilegios](sql/002_privileges.sql) y el [modelo V2 aditivo](sql/004_v2_application_model.sql). Cada script usa transacción y detiene la ejecución ante error. Los seeds y pruebas **no** se ejecutan al arrancar. En una instalación existente V1, la migración V2 debe ser ejecutada manualmente por un operador tras backup; el entrypoint no reejecuta scripts sobre un volumen existente. Si falla, resolver el error antes de continuar; no borrar el volumen para ocultarlo.
+El entrypoint oficial ejecuta [00-bootstrap.sh](init/00-bootstrap.sh) únicamente con el directorio de datos vacío: baseline, privilegios, [modelo V2](sql/004_v2_application_model.sql) y [persistencia de evidencia NVD](sql/005_v2_nvd_evidence.sql). Cada script usa transacción y detiene la ejecución ante error. Los seeds y pruebas **no** se ejecutan al arrancar. En una instalación existente, aplicar manualmente los scripts pendientes en orden y después de backup; el entrypoint no reejecuta scripts sobre un volumen existente. Si falla, resolver el error antes de continuar; no borrar el volumen para ocultarlo.
 
 ## Demostración y consultas
 

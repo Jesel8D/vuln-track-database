@@ -54,6 +54,7 @@ db -f /vulntrack/seed/001_demo.sql
 db -f /vulntrack/seed/001_demo.sql
 db -f /vulntrack/tests/001_integrity.sql
 db -f /vulntrack/tests/002_v2_security.sql
+db -f /vulntrack/tests/004_v2_workspace_bootstrap.sql
 db -f /vulntrack/sql/003_queries.sql
 
 # Dos conexiones intentan confirmar el mismo intento lógico. La unicidad del

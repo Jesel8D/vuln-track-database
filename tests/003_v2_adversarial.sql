@@ -71,6 +71,8 @@ VALUES ('54000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-0000000
  '51000000-0000-4000-8000-000000000001', '52000000-0000-4000-8000-000000000001',
  '53000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001',
  'cpe:2.3:a:demo:product:1.0:*:*:*:*:*:*:*');
+UPDATE vulntrack.application_analysis_runs SET status='running', started_at=clock_timestamp()
+WHERE id='54000000-0000-4000-8000-000000000001';
 
 SELECT pg_temp.expect_error($q$INSERT INTO vulntrack.application_analysis_runs
     (id,workspace_id,application_id,target_id,initiated_by,selected_cpe)
@@ -101,9 +103,10 @@ SELECT pg_temp.expect_error($q$INSERT INTO vulntrack.application_targets
     '00000000-0000-4000-8000-000000000001')$q$,
     '23514', 'esquema URL no HTTP rechazado');
 
-INSERT INTO vulntrack.application_findings (id, workspace_id, analysis_id, external_id, title)
+INSERT INTO vulntrack.application_findings (id, workspace_id, analysis_id, external_id, title, evidence)
 VALUES ('55000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001',
- '54000000-0000-4000-8000-000000000001', 'CVE-2026-12345', 'Hallazgo sintético');
+ '54000000-0000-4000-8000-000000000001', 'CVE-2026-12345', 'Hallazgo sintético',
+ '{"source":"NVD","initial_applicability":"potential"}');
 INSERT INTO vulntrack.recommendations (id, workspace_id, finding_id, recommendation, created_by)
 VALUES ('56000000-0000-4000-8000-000000000001', '50000000-0000-4000-8000-000000000001',
  '55000000-0000-4000-8000-000000000001', 'Actualizar a una versión corregida',
@@ -135,6 +138,9 @@ SELECT pg_temp.expect_error($q$INSERT INTO vulntrack.applications(id,workspace_i
 SELECT pg_temp.expect_error(format('SELECT vulntrack.establish_context(%L,%L,%s,%L,%L)', '00000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001', :exp, :'nonce', repeat('0',64)), '28000', 'firma incorrecta');
 SELECT pg_temp.expect_error(format('SELECT vulntrack.establish_context(%L,%L,%s,%L,%L)', '00000000-0000-4000-8000-000000000002','50000000-0000-4000-8000-000000000001', :exp, :'nonce', :'sig_nonmember'), '42501', 'usuario no miembro');
 SELECT pg_temp.expect_error(format('SELECT vulntrack.establish_context(%L,%L,%s,%L,%L)', '00000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001', 1, :'nonce', :'sig_a'), '28000', 'contexto expirado');
+SELECT pg_temp.expect_error($q$SELECT vulntrack.establish_context(
+    '00000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001',
+    NULL,NULL,NULL)$q$, '28000', 'contexto nulo no omite la firma');
 SELECT pg_temp.expect_error('SELECT hmac_key FROM vulntrack_private.context_keys', '42501', 'app no lee clave');
 SELECT vulntrack.establish_context('00000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001', :exp, :'nonce', :'sig_a');
 SELECT pg_temp.assert_true((SELECT count(*)=1 FROM vulntrack.applications), 'A ve su aplicación');
@@ -174,6 +180,9 @@ UPDATE vulntrack.users SET active=false WHERE id='00000000-0000-4000-8000-000000
 BEGIN;
 SET LOCAL ROLE vulntrack_app;
 SELECT pg_temp.expect_error(format('SELECT vulntrack.establish_context(%L,%L,%s,%L,%L)', '00000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001', :exp, :'nonce', :'sig_a'), '42501', 'usuario inactivo rechazado');
+SELECT pg_temp.expect_error($q$SELECT * FROM vulntrack.list_user_workspaces(
+    '00000000-0000-4000-8000-000000000001',NULL,NULL,NULL)$q$,
+    '28000', 'directorio no acepta contexto nulo');
 ROLLBACK;
 \o
 \echo 'Pruebas adversariales completadas.'

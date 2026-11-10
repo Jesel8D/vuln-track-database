@@ -1,6 +1,6 @@
 # Validación técnica de Database V2
 
-**Resultado: VALIDACIÓN INCOMPLETA.** No supone aprobación arquitectónica, integración de backend ni autorización para producción. Base examinada: `54b7644467a1096c011daf3e5c23d7f9a7773f93`. La validación usa código de esta rama, no altera V1 ni el árbol de trabajo original. Fecha: 2026-11-06.
+**Resultado: VALIDACIÓN INCOMPLETA.** No supone aprobación arquitectónica, integración de backend ni autorización para producción. La ejecución histórica descrita abajo examinó `54b7644467a1096c011daf3e5c23d7f9a7773f93`, antes de `sql/005_v2_nvd_evidence.sql`; sus resultados no validan esa nueva migración ni el código Backend V2.
 
 ## Causa y correcciones
 
@@ -44,3 +44,7 @@ Se comprobó también que una firma válida puede reutilizarse durante su vigenc
 ## Pendiente antes de integración FastAPI
 
 No se probó 0002 de Backend ni compatibilidad de catálogo Alembic, migración de V1 con datos históricos, rollback/restauración o concurrencia de pertenencias. No se verificaron exhaustivamente INSERT/UPDATE/DELETE en todas las entidades y roles, desactivación durante sesión, caducidad durante transacciones largas, amenazas de SQL arbitrario, matrices de permisos/vistas/errores, ni ciclo de vida de conexiones real de SQLAlchemy. Backend V1.3 no firma ni instala contexto y requiere `assets.created_by`, ausente en V1/V2 sin 0002. Acordar contrato, roles no propietarios, bootstrap, secretos y estrategia para datos históricos; completar pruebas aisladas antes de integrar. Ninguna decisión pendiente queda aprobada por estas pruebas.
+
+## Extensión NVD V2 posterior — pendiente de ejecutar
+
+En 2026-11-09 se añadió `sql/005_v2_nvd_evidence.sql`, funciones de bootstrap/directorio HMAC, restricciones y triggers NVD, además de `tests/004_v2_workspace_bootstrap.sql` y nuevos casos en 002/003. **Esta extensión no se considera validada todavía.** En la sesión de implementación `docker.exe` estaba instalado pero no había daemon en el pipe Docker; PostgreSQL local temporal tampoco pudo inicializarse porque Windows rechazó la creación del token restringido. No se ejecutó ningún test de la extensión. Debe correr en Docker/PostgreSQL desechable antes de aplicarse a datos persistentes.

@@ -1,6 +1,6 @@
 # Esquema relacional V1 heredado
 
-**PROPUESTA** técnica implementada y contrastable con [001_schema.sql](../sql/001_schema.sql); no reemplaza la aprobación del modelo global. Esquema `vulntrack`, cinco tablas: cuatro entidades de dominio y una tabla técnica. UUID sin generador SQL por defecto: los identificadores deben llegar del servidor de aplicación o de los scripts de demostración. Marcas `timestamptz`; sesión de desarrollo en UTC. API deberá emitir UTC RFC 3339 y decidir formatos al mostrar fechas.
+Este documento describe V1 heredado, contrastable con [001_schema.sql](../sql/001_schema.sql): cinco tablas. La instalación V2 añade diez tablas y `005_v2_nvd_evidence.sql` extiende runs/findings para trazabilidad NVD. UUID sin generador SQL por defecto en V1; IDs V2 los asigna el servidor. Timestamps `timestamptz`.
 
 Este documento describe únicamente las tablas V1 de inventario legado; para el modelo de aplicaciones web y workspaces ver [DATABASE_V2_PLAN.md](DATABASE_V2_PLAN.md). Las tablas V1 no reciben las políticas RLS de V2 y no deben exponerse a un login operativo multiusuario.
 

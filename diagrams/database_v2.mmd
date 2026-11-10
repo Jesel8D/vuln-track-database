@@ -64,6 +64,17 @@ erDiagram
         text kind "NVD only"
         text status
         text coverage "nullable"
+        uuid request_key "nullable; idempotency"
+        text request_hash "nullable; SHA-256"
+        jsonb query_parameters
+        integer total_results "nullable"
+        integer retrieved_count
+        integer stored_count
+        integer page_count
+        integer next_index
+        jsonb warning_codes
+        jsonb page_manifest
+        text failure_code "nullable"
     }
     application_findings {
         uuid id PK
@@ -73,6 +84,7 @@ erDiagram
         text applicability
         text status
         jsonb cvss "nullable"
+        jsonb evidence "nullable; bounded NVD snapshot"
     }
     recommendations {
         uuid id PK

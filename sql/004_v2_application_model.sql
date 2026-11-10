@@ -334,7 +334,9 @@ DECLARE
     context_key bytea;
     signed_payload text;
 BEGIN
-    IF expires_epoch <= floor(extract(epoch FROM clock_timestamp()))::bigint
+    IF requested_user IS NULL OR requested_workspace IS NULL OR expires_epoch IS NULL
+       OR request_nonce IS NULL OR request_signature IS NULL
+       OR expires_epoch <= floor(extract(epoch FROM clock_timestamp()))::bigint
        OR expires_epoch > floor(extract(epoch FROM clock_timestamp()))::bigint + 60
        OR request_signature !~ '^[0-9a-f]{64}$' THEN
         RAISE EXCEPTION 'contexto firmado inválido o expirado' USING ERRCODE = '28000';
