@@ -1,5 +1,10 @@
 # VulnTrack — PostgreSQL Database V1
 
+La rama de revisión `feat/v2-registration-database` añade únicamente un rol/grants
+opt-in para registro normal desde la API: [coordinación y pruebas](docs/SELF_SERVICE_REGISTRATION.md).
+El bootstrap nuevo aplica SQL006 después de SQL005; no concede automáticamente
+esa membresía a las APIs existentes ni cambia usuarios/RLS.
+
 Implementación local de la persistencia de usuarios mínimos, activos, evaluaciones NVD y hallazgos potenciales. Incluye soporte de almacenamiento para claves idempotentes; no contiene API, autenticación completa, ORM ni migraciones Alembic. El diseño materializado continúa como **PROPUESTA** técnica provisional para revisión, según la misión de Database V1 del 30-10-2026. D-001 y D-002 permanecen **APROBADA** en el [contexto central](https://github.com/Jesel8D/vuln-track-context/tree/dev/jesel).
 
 El [contexto y limitaciones del MVP](docs/PROJECT_CONTEXT_AND_LIMITATIONS.md) describe el producto previsto. La [revisión de seguridad](docs/SECURITY_REVIEW.md) registra los riesgos encontrados antes de diseñar Database V2.
