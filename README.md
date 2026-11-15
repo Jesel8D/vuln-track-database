@@ -1,5 +1,8 @@
 # VulnTrack — PostgreSQL Database V1
 
+Fase 2B: [SQL008, roles, RLS y compatibilidad](docs/V2_TARGET_VERIFICATION.md).
+La verificacion remota y ZAP siguen bloqueados; no aplicar sobre la instalacion personal sin una decision posterior.
+
 La rama de revisión `feat/v2-registration-database` añade únicamente un rol/grants
 opt-in para registro normal desde la API: [coordinación y pruebas](docs/SELF_SERVICE_REGISTRATION.md).
 El bootstrap nuevo aplica SQL006 después de SQL005; no concede automáticamente
