@@ -11,3 +11,5 @@ psql -X --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
   --set ON_ERROR_STOP=1 --file /vulntrack/sql/005_v2_nvd_evidence.sql
 psql -X --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
   --set ON_ERROR_STOP=1 --file /vulntrack/sql/006_self_service_registration.sql
+psql -X --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \
+  --set ON_ERROR_STOP=1 --file /vulntrack/sql/007_v2_stabilization.sql

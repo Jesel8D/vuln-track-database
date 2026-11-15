@@ -76,3 +76,7 @@ Antes de un cambio: identificar proyecto/volumen y versión, generar backup con 
 El [diccionario y relaciones](docs/SCHEMA.md), [decisiones provisionales](docs/PROVISIONAL_DECISIONS.md) y [ER implementado](diagrams/database_v1.mmd) describen la versión exacta. Para backend: aprobar contrato e identidad; provisionar fuera de Git un login con membresía del grupo técnico `vulntrack_app`; usar transacciones parametrizadas y secretos operativos externos; validar CPE y reglas de negocio. El grupo es `NOLOGIN`, no superusuario y no administra esquema ni usuarios. No tiene actualización/eliminación de activos ni lectura de hashes. No implementa autorización por recurso: esa política sigue **PENDIENTE**.
 
 ZAP no se almacena ni ejecuta en V1: `kind='zap_baseline'` se rechaza. Faltan catálogo autorizado, identidad/permisos, red de salida, controles de DNS/redirecciones y pruebas. Tampoco hay sincronización offline ni integración NVD real. Los checks de texto no detectan secretos en notas: la aplicación y los operadores deben respetar la restricción de datos no sensibles.
+
+## Desarrollo persistente V2 y estabilización
+
+La rama `feat/v2-persistent-development-database` incorpora [SQL007 y la coordinación de persistencia](docs/V2_PERSISTENT_DEVELOPMENT.md), con constraints compatibles con undetermined y sin reescribir evidencia ni alterar RLS. El volumen local y los backups se gestionan desde Backend `feat/v2-stabilization`; la línea MVP-B permanece separada.
