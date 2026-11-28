@@ -1,9 +1,5 @@
 # VulnTrack — PostgreSQL Database V1
 
-## About
-
-Repositorio de persistencia PostgreSQL de VulnTrack. Contiene configuración, scripts SQL, roles y políticas de acceso, datos sintéticos de demostración, pruebas y documentación del esquema. La consulta a NVD y la lógica de aplicación pertenecen al backend.
-
 Fase 2B: [SQL008, roles, RLS y compatibilidad](docs/V2_TARGET_VERIFICATION.md).
 La verificacion remota y ZAP siguen bloqueados; no aplicar sobre la instalacion personal sin una decision posterior.
 
