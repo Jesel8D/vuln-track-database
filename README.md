@@ -28,7 +28,7 @@ docker compose --env-file .env.example -p vulntrack-dev exec postgres sh -c 'psq
 
 El ejemplo utiliza una contraseña **solo de desarrollo**, públicamente conocida. No usarlo en un entorno compartido ni producción. Para configuración privada puede copiarse `.env.example` a `.env` (ignorado por Git), cambiar la contraseña y usar `--env-file .env`; esta misión no generó `.env`. Variables: `POSTGRES_DB=vulntrack`, `POSTGRES_USER=vulntrack_owner` (administrador local, no usuario de la aplicación), `POSTGRES_PASSWORD` obligatorio, `POSTGRES_PORT=55432`. El puerto se publica solo en `127.0.0.1`; móvil y web deberán consumir la API, no conectarse a PostgreSQL. El volumen del proyecto persiste al reiniciar o detener. No reutilizar un nombre de proyecto ajeno.
 
-Imagen fija `postgres:16.15-alpine` con digest en [compose.yaml](compose.yaml), **PROPUESTA** de configuración provisional. PostgreSQL 16 está soportado; versión menor y tag se comprobaron el 30-10-2026 en [política oficial](https://www.postgresql.org/support/versioning/) e [imagen oficial](https://hub.docker.com/_/postgres). La imagen efectivamente probada informó PostgreSQL 16.15. Actualizar tag y digest juntos tras revisar notas y probar una copia; no se afirma compatibilidad con un stack backend todavía no seleccionado.
+La configuración actual fija `postgres:16.16-alpine3.24` mediante digest en [compose.yaml](compose.yaml). La suite de integración documentada en [TEST_RESULTS.md](docs/TEST_RESULTS.md) se ejecutó históricamente con PostgreSQL 16.15 el 30-10-2026; **16.16 aún requiere repetir las pruebas de integración** en un contenedor desechable antes de producción. Actualizar tag y digest juntos y conservar el reporte de escaneo de la imagen.
 
 ## Orden y estructura
 
